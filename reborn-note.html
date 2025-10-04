@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>REBORN NOTE</title>
+  <style>
+    body {
+      font-family: 'Orbitron', sans-serif;
+      background: radial-gradient(circle at top, #0f0f1f, #050510 80%);
+      color: #fff;
+      text-align: center;
+      padding: 40px;
+      overflow-x: hidden;
+    }
+
+    h1 {
+      font-size: 3em;
+      color: #00ffff;
+      text-shadow: 0 0 10px #0ff, 0 0 20px #0ff;
+    }
+
+    .screen { display: none; }
+    .active { display: block; }
+
+    button {
+      background: linear-gradient(135deg, #00ffff, #0088ff);
+      border: none;
+      padding: 12px 24px;
+      border-radius: 20px;
+      font-size: 1.2em;
+      margin: 12px;
+      cursor: pointer;
+      color: #000;
+      font-weight: bold;
+      box-shadow: 0 0 10px #00faff, 0 0 20px #0077ff;
+      transition: 0.3s;
+    }
+    button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 20px #00faff, 0 0 40px #0077ff;
+    }
+
+    textarea, input {
+      width: 80%;
+      padding: 12px;
+      margin: 12px 0;
+      border-radius: 12px;
+      border: none;
+      font-size: 1em;
+    }
+
+    .note {
+      background: rgba(0, 255, 255, 0.08);
+      margin: 15px auto;
+      padding: 20px;
+      border-radius: 16px;
+      max-width: 600px;
+      text-align: left;
+      border: 1px solid rgba(0, 255, 255, 0.5);
+      box-shadow: 0 0 12px rgba(0,255,255,0.4);
+      animation: fadeIn 0.5s ease;
+    }
+
+    .note strong {
+      color: #00ffff;
+      font-size: 1.1em;
+    }
+
+    .time {
+      font-size: 0.8em;
+      color: #aaa;
+      display: block;
+      margin-top: 5px;
+    }
+
+    .delete-btn {
+      background: #ff0066;
+      color: #fff;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      float: right;
+      font-size: 0.9em;
+      box-shadow: 0 0 8px #ff0066;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <h1>REBORN NOTE</h1>
+
+  <div id="menu" class="screen active">
+    <button onclick="showScreen('write')">✍ 書き込む</button>
+    <button onclick="showScreen('view')">📖 みんなのNOTEを見る</button>
+  </div>
+
+  <div id="write" class="screen">
+    <h2>NOTEを書き込む</h2>
+    <input id="username" placeholder="名前を入力してください"><br>
+    <textarea id="noteInput" rows="5" placeholder="ここに書いてね..."></textarea><br>
+    <button onclick="addNote()">🚀 投稿する</button>
+    <button onclick="showScreen('menu')">⬅ 戻る</button>
+  </div>
+
+  <div id="view" class="screen">
+    <h2>みんなのNOTE</h2>
+    <div id="noteList"></div>
+    <button onclick="showScreen('menu')">⬅ 戻る</button>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import { getFirestore, collection, addDoc, deleteDoc, doc, serverTimestamp, query, orderBy, onSnapshot } 
+      from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+
+    // あなたのFirebase設定
+    const firebaseConfig = {
+      apiKey: "AIzaSyDCjB4MpiubpzYoaIx9Hr9vCwnkz_10r2k",
+      authDomain: "reborn-note.firebaseapp.com",
+      projectId: "reborn-note",
+      storageBucket: "reborn-note.firebasestorage.app",
+      messagingSenderId: "482151108075",
+      appId: "1:482151108075:web:16631fd61f4dc667331dae"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    function showScreen(id) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+    }
+    window.showScreen = showScreen;
+
+    // 投稿
+    async function addNote() {
+      const user = document.getElementById("username").value.trim();
+      const text = document.getElementById("noteInput").value.trim();
+      if (user && text) {
+        await addDoc(collection(db, "notes"), {
+          user: user,
+          text: text,
+          time: serverTimestamp()
+        });
+        document.getElementById("noteInput").value = "";
+        alert("投稿しました！");
+        showScreen('menu');
+      } else {
+        alert("名前と内容を入力してください");
+      }
+    }
+    window.addNote = addNote;
+
+    // NOTEリアルタイム取得
+    const q = query(collection(db, "notes"), orderBy("time", "desc"));
+    onSnapshot(q, (snapshot) => {
+      const list = document.getElementById("noteList");
+      list.innerHTML = "";
+      snapshot.forEach(docSnap => {
+        const note = docSnap.data();
+        const id = docSnap.id;
+        const div = document.createElement("div");
+        div.className = "note";
+        const date = note.time ? note.time.toDate().toLocaleString() : "時刻不明";
+
+        div.innerHTML = `
+          <strong>${note.user}</strong><br>
+          ${note.text}<br>
+          <span class="time">${date}</span>
+          ${note.user === document.getElementById("username").value ? 
+            `<button class="delete-btn" onclick="deleteNote('${id}')">削除</button>` 
+            : ""}
+        `;
+        list.appendChild(div);
+      });
+    });
+
+    // 削除
+    async function deleteNote(id) {
+      if (confirm("本当に削除しますか？")) {
+        await deleteDoc(doc(db, "notes", id));
+      }
+    }
+    window.deleteNote = deleteNote;
+  </script>
+</body>
+</html>
